@@ -4,6 +4,10 @@ import subprocess
 import time
 
 import streamlit as st
+try:
+    import psutil
+except Exception:
+    psutil = None
 
 from tgcf.config import CONFIG, read_config, write_config
 from tgcf.web_ui.password import check_password
@@ -66,19 +70,31 @@ if check_password(st):
         )
         # check if process is running using pid
         try:
-            os.kill(CONFIG.pid, signal.SIGCONT)
+            if hasattr(signal, "SIGCONT"):
+                os.kill(CONFIG.pid, signal.SIGCONT)
+            elif psutil is not None:
+                psutil.Process(CONFIG.pid).resume()
+            else:
+                st.warning(
+                    "Resume not available: install psutil or use POSIX.")
         except Exception as err:
             st.code("The process has stopped.")
             st.code(err)
             CONFIG.pid = 0
             write_config(CONFIG)
             time.sleep(1)
-            st.experimental_rerun()
+            st.rerun()
 
         stop = st.button("Stop", type="primary")
         if stop:
             try:
-                os.kill(CONFIG.pid, signal.SIGSTOP)
+                if hasattr(signal, "SIGSTOP"):
+                    os.kill(CONFIG.pid, signal.SIGSTOP)
+                elif psutil is not None:
+                    psutil.Process(CONFIG.pid).suspend()
+                else:
+                    st.warning(
+                        "Pause not available: install psutil or use POSIX.")
             except Exception as err:
                 st.code(err)
 
@@ -92,7 +108,7 @@ if check_password(st):
     if check:
         with open("logs.txt", "w") as logs:
             process = subprocess.Popen(
-                ["tgcf", "--loud", mode],
+                ["tgcf", mode],
                 stdout=logs,
                 stderr=subprocess.STDOUT,
             )
@@ -100,20 +116,21 @@ if check_password(st):
         write_config(CONFIG)
         time.sleep(2)
 
-        st.experimental_rerun()
+        st.rerun()
 
     try:
         lines = st.slider(
             "Lines of logs to show", min_value=100, max_value=1000, step=100
         )
-        temp_logs = "logs_n_lines.txt"
-        os.system(f"rm {temp_logs}")
-        with open("logs.txt", "r") as file:
-            pass
-
-        os.system(f"tail -n {lines} logs.txt >> {temp_logs}")
-        with open(temp_logs, "r") as file:
-            st.code(file.read())
+        # Read last N lines of logs.txt in pure Python for cross-platform support
+        with open("logs.txt", "r", encoding="utf-8", errors="ignore") as file:
+            content = file.readlines()
+        if not content:
+            st.info("Logs are empty. The process may not have started yet.")
+        else:
+            tail = content[-lines:] if len(content) > lines else content
+            st.code("".join(tail))
     except FileNotFoundError as err:
         st.write("No present logs found")
-    st.button("Load more logs")
+    if st.button("Load more logs"):
+        st.rerun()

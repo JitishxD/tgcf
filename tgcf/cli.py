@@ -40,9 +40,11 @@ def verbosity_callback(value: bool):
     """Set logging level."""
     traceback.install()
     if value:
-        level = logging.INFO
+        print(f"------------Loud value: {value}")
+        level = logging.DEBUG
     else:
-        level = logging.WARNING
+        print(f"------------Loud value: {value}")
+        level = logging.INFO
     logging.basicConfig(
         level=level,
         format="%(message)s",
@@ -54,6 +56,7 @@ def verbosity_callback(value: bool):
         ],
     )
     topper()
+    logging.info(f"Logging level set to {logging.getLevelName(level)}")
     logging.info("Verbosity turned on! This is suitable for debugging")
 
 
